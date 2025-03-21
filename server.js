@@ -53,8 +53,6 @@ const authenticateToken = (req, res, next) => {
         next();
     });
 };
-
-// Rota raiz
 app.get('/', async (req, res) => {
     console.log("Server rodando");
     res.status(200).json({ message: 'Servidor rodando com sucesso!' });
@@ -82,7 +80,6 @@ app.post('/login', async (req, res) => {
         res.status(500).json({ message: 'Erro no servidor', error: err.message });
     }
 });
-
 // Rota para listar todos os exames (apenas usuários autenticados)
 app.get('/exames', authenticateToken, async (req, res) => {
     try {
