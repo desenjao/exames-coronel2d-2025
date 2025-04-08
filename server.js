@@ -11,8 +11,8 @@ const app = express();
 const porta = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
-app.use(bodyParser.json());
+
+
 app.use(cors({
   origin: [
     '*'
@@ -20,6 +20,7 @@ app.use(cors({
   credentials: true, // Se estiver usando cookies/auth
   methods: ['GET', 'POST', 'PUT', 'DELETE']
 }));
+app.use(bodyParser.json());
 // Conexão com o banco de dados Neon
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
