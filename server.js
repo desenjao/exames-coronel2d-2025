@@ -5,74 +5,120 @@ import jwt from 'jsonwebtoken';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
 import pg from 'pg';
+
 const { Pool } = pg;
 
-// Configuração assíncrona
+// Sistema de debug aprimorado
+const debug = {
+  startup: (...args) => console.log('🔧 [STARTUP]', ...args),
+  db: (...args) => console.log('🗄️ [DATABASE]', ...args),
+  route: (...args) => console.log('🛣️ [ROUTE]', ...args),
+  error: (...args) => console.error('🚨 [ERROR]', ...args),
+  env: (...args) => console.log('🌿 [ENV]', ...args),
+  auth: (...args) => console.log('🔐 [AUTH]', ...args)
+};
+
+// Middleware de autenticação JWT (definido antes de ser usado)
+const authenticate = (req, res, next) => {
+  debug.auth('Iniciando autenticação');
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.split(' ')[1];
+  
+  if (!token) {
+    debug.auth('Falha: Token não fornecido');
+    return res.status(401).json({ error: 'Token de acesso não fornecido' });
+  }
+
+  jwt.verify(token, process.env.SECRET_KEY, (err, user) => {
+    if (err) {
+      debug.auth(`Falha: Token inválido (${err.message})`);
+      return res.status(403).json({ error: 'Token inválido ou expirado' });
+    }
+    
+    debug.auth(`Autenticação bem-sucedida para usuário: ${user.email}`);
+    req.user = user;
+    next();
+  });
+};
+
 (async () => {
   try {
-    // Carrega variáveis de ambiente
-    dotenv.config();
+    debug.startup('Iniciando servidor...');
     
-    // Validação das variáveis essenciais
+    // Configuração de ambiente
+    dotenv.config();
+    debug.env('Variáveis de ambiente carregadas');
+    
+    // Validação de variáveis essenciais
     const requiredEnvVars = ['PORT', 'SECRET_KEY', 'NEON_DATABASE_URL', 'FRONTEND_URL'];
+    debug.env('Verificando variáveis obrigatórias:', requiredEnvVars);
+    
     for (const envVar of requiredEnvVars) {
       if (!process.env[envVar]) {
+        debug.error(`Variável faltando: ${envVar}`);
         throw new Error(`Variável de ambiente ${envVar} não configurada`);
       }
     }
 
-    // Configurações do servidor
+    // Inicialização do Express
     const app = express();
     const PORT = process.env.PORT || 4000;
-    const SECRET_KEY = process.env.SECRET_KEY;
-    const SALT_ROUNDS = parseInt(process.env.SALT_ROUNDS) || 10;
-    const FRONTEND_URL = process.env.FRONTEND_URL;
+    debug.startup(`Configurando servidor na porta ${PORT}`);
 
-    // Pool de conexões com Neon PostgreSQL
-    const pool = new Pool({
+    // Configuração do pool PostgreSQL
+    const poolConfig = {
       connectionString: process.env.NEON_DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false
-      },
+      ssl: { rejectUnauthorized: false },
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000
+    };
+    
+    debug.db('Configuração do pool:', {
+      ...poolConfig,
+      connectionString: poolConfig.connectionString 
+        ? `${poolConfig.connectionString.substring(0, 30)}...` 
+        : 'UNDEFINED'
     });
 
-    // Teste de conexão com o banco
+    const pool = new Pool(poolConfig);
+
+    // Teste de conexão com o banco de dados
     try {
+      debug.db('Testando conexão com o banco...');
       const client = await pool.connect();
-      await client.query('SELECT NOW()');
+      const dbResult = await client.query('SELECT NOW()');
       client.release();
-      console.log('✅ Conexão com o Neon PostgreSQL estabelecida');
+      debug.db('Conexão bem-sucedida. Hora do banco:', dbResult.rows[0].now);
     } catch (dbError) {
-      console.error('❌ Falha na conexão com o Neon:', dbError.message);
+      debug.error('Falha na conexão com o banco:', {
+        message: dbError.message,
+        code: dbError.code,
+        stack: dbError.stack
+      });
       process.exit(1);
     }
 
     // Middlewares
     app.use(express.json());
+    debug.startup('Middleware express.json() configurado');
+    
     app.use(cors({
-      origin: FRONTEND_URL,
+      origin: process.env.FRONTEND_URL,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
       allowedHeaders: ['Content-Type', 'Authorization'],
       credentials: true
     }));
+    debug.startup(`CORS configurado para ${process.env.FRONTEND_URL}`);
+
     app.use(morgan('dev'));
+    debug.startup('Morgan logger configurado');
 
-    // Middleware de autenticação JWT
-    const authenticate = (req, res, next) => {
-      const authHeader = req.headers['authorization'];
-      const token = authHeader && authHeader.split(' ')[1];
-      
-      if (!token) return res.status(401).json({ error: 'Token de acesso não fornecido' });
-
-      jwt.verify(token, SECRET_KEY, (err, user) => {
-        if (err) return res.status(403).json({ error: 'Token inválido ou expirado' });
-        req.user = user;
-        next();
-      });
-    };
+    // Rotas básicas
+    app.get('/favicon.ico', (req, res) => {
+      debug.route('Requisição de favicon recebida');
+      res.status(204).end();
+    });
     app.get('/', async (req, res) => {
       res.send('ta rodando o bixão')
     });
@@ -257,24 +303,24 @@ const { Pool } = pg;
       }
     });
 
-    // Inicialização do servidor
-    const server = app.listen(PORT, () => {
-      console.log(`\n🚀 Servidor rodando na porta ${PORT}`);
-      console.log(`🔗 Ambiente: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🌐 Frontend: ${FRONTEND_URL}`);
-      console.log(`💾 Banco de dados: Neon PostgreSQL\n`);
-    });
+ // Inicialização do servidor
+const server = app.listen(PORT, () => {
+  console.log(`\n🚀 Servidor rodando na porta ${PORT}`);
+  console.log(`🔗 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌐 Frontend: ${process.env.FRONTEND_URL}`); // Corrigido aqui
+  console.log(`💾 Banco de dados: Neon PostgreSQL\n`);
+});
 
-    // Gerenciamento de shutdown
-    process.on('SIGTERM', () => {
-      console.log('\n🛑 Recebido SIGTERM. Encerrando servidor...');
-      server.close(() => {
-        pool.end(() => {
-          console.log('♻️ Servidor e conexões encerrados corretamente');
-          process.exit(0);
-        });
-      });
+// Gerenciamento de shutdown
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Recebido SIGTERM. Encerrando servidor...');
+  server.close(() => {
+    pool.end(() => {
+      console.log('♻️ Servidor e conexões encerrados corretamente');
+      process.exit(0);
     });
+  });
+});
 
   } catch (startupError) {
     console.error('\n❌ Falha crítica na inicialização:', startupError.message);
