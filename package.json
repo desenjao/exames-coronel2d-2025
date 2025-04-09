@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon server.js"
@@ -13,7 +12,11 @@
   "license": "ISC",
   "dependencies": {
     "bcrypt": "^5.1.1",
+<<<<<<< HEAD
     "bcryptjs": "^3.0.2",
+=======
+    "body-parser": "^2.2.0",
+>>>>>>> f24d6995816ac4a8a9124ddadcb48219f23e467f
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
